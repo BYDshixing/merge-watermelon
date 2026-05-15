@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>合成大西瓜 - 自定义版</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{
+  height:100%;
+  background:linear-gradient(135deg,#1a0a2e 0%,#16213e 50%,#0f3460 100%);
+  font-family:'Microsoft YaHei',sans-serif;
+  overflow:hidden;
+  touch-action:none;
+}
+
+/* ===== 移动端：竖向布局 ===== */
+#app{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  height:100%;
+  padding:6px 6px 0;
+  gap:6px;
+}
+
+/* 顶部信息栏 */
+#top-bar{
+  width:100%;
+  max-width:420px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+.info-card{
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:12px;
+  padding:6px 10px;
+  backdrop-filter:blur(8px);
+}
+#score-box{flex:1;text-align:center;}
+#score-label{color:#e0c9ff;font-size:10px;letter-spacing:1px;}
+#score-val{
+  font-size:24px;font-weight:900;
+  background:linear-gradient(135deg,#f093fb,#f5576c);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#best-box{flex:1;text-align:center;}
+#best-label{color:#e0c9ff;font-size:10px;letter-spacing:1px;}
+#best-val{font-size:18px;font-weight:bold;color:#ffd700;}
+#next-box{
+  display:flex;align-items:center;gap:6px;
+  padding:4px 10px;
+}
+#next-canvas{border-radius:50%;border:2px solid rgba(255,255,255,0.3);}
+#next-info{color:#ccc;font-size:10px;text-align:center;}
+#next-name{font-weight:bold;color:#fff;font-size:12px;}
+#restart-btn{
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff;border:none;border-radius:10px;
+  padding:8px 12px;font-size:13px;cursor:pointer;
+  font-weight:bold;flex-shrink:0;
+  box-shadow:0 3px 12px rgba(102,126,234,0.4);
+}
+#restart-btn:active{transform:scale(0.95);}
+
+/* 画布容器 */
+#canvas-wrap{
+  position:relative;
+  flex-shrink:0;
+}
+#game-canvas{
+  display:block;
+  border-radius:12px;
+  border:2px solid rgba(255,255,255,0.2);
+  box-shadow:0 0 30px rgba(100,0,255,0.3);
+}
+#game-over-overlay{
+  display:none;
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,0.78);
+  border-radius:12px;
+  flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  z-index:20;
+}
+#game-over-overlay.show{display:flex;}
+#go-title{
+  font-size:32px;font-weight:900;
+  background:linear-gradient(135deg,#f093fb,#f5576c);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#go-score{color:#fff;font-size:16px;}
+.big-btn{
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff;border:none;padding:10px 28px;
+  border-radius:25px;font-size:15px;font-weight:bold;
+  cursor:pointer;box-shadow:0 4px 15px rgba(102,126,234,0.4);
+}
+
+/* 底部自定义面板（抽屉） */
+#customize-drawer{
+  width:100%;max-width:420px;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:14px 14px 0 0;
+  backdrop-filter:blur(10px);
+  flex-shrink:0;
+  overflow:hidden;
+  transition:max-height 0.3s ease;
+}
+#drawer-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;cursor:pointer;
+  color:#e0c9ff;font-size:13px;font-weight:bold;letter-spacing:1px;
+  user-select:none;
+}
+#drawer-toggle:active{background:rgba(255,255,255,0.05);}
+#drawer-arrow{transition:transform 0.3s;font-size:10px;}
+#drawer-arrow.open{transform:rotate(180deg);}
+#fruit-scroll{
+  overflow-x:auto;overflow-y:hidden;
+  display:flex;gap:10px;padding:6px 12px 10px;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#fruit-scroll::-webkit-scrollbar{display:none;}
+.fruit-chip{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  cursor:pointer;flex-shrink:0;
+  padding:6px 8px;border-radius:10px;
+  transition:background 0.2s;
+}
+.fruit-chip:hover,.fruit-chip:active{background:rgba(255,255,255,0.12);}
+.fruit-thumb{
+  width:44px;height:44px;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.35);
+}
+.fruit-chip-name{color:#fff;font-size:10px;font-weight:bold;white-space:nowrap;}
+.fruit-chip-score{color:#aaa;font-size:9px;}
+
+/* ===== 桌面端：三栏布局 ===== */
+@media(min-width:700px){
+  body{display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  #app{
+    flex-direction:row;align-items:flex-start;
+    height:auto;padding:0;gap:14px;
+    max-width:none;
+  }
+  #top-bar{
+    flex-direction:column;width:160px;max-width:none;gap:10px;
+    flex-shrink:0;
+  }
+  #score-box,#best-box{width:100%;}
+  #next-box{flex-direction:column;align-items:center;}
+  #restart-btn{width:100%;padding:10px;}
+  #customize-drawer{
+    width:160px;max-width:none;
+    border-radius:14px;
+    flex-shrink:0;
+    max-height:none !important;
+  }
+  #drawer-toggle{display:none;}
+  #fruit-scroll{
+    flex-direction:column;overflow-x:hidden;overflow-y:auto;
+    max-height:500px;padding:10px 10px;gap:6px;
+  }
+  .fruit-chip{flex-direction:row;gap:8px;width:100%;}
+  .fruit-thumb{width:36px;height:36px;flex-shrink:0;}
+  .fruit-chip-info{text-align:left;}
+  .fruit-chip-name{font-size:12px;}
+  .fruit-chip-score{font-size:10px;}
+}
+
+#hidden-file{display:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 顶部/侧边信息栏 -->
+  <div id="top-bar">
+    <div class="info-card" id="score-box">
+      <div id="score-label">🏆 得分</div>
+      <div id="score-val">0</div>
+    </div>
+    <div class="info-card" id="best-box">
+      <div id="best-label">⭐ 最高</div>
+      <div id="best-val">0</div>
+    </div>
+    <div class="info-card" id="next-box">
+      <canvas id="next-canvas" width="44" height="44"></canvas>
+      <div id="next-info">
+        <div style="color:#aaa;font-size:9px;">下一个</div>
+        <div id="next-name">-</div>
+      </div>
+    </div>
+    <button id="restart-btn">🔄</button>
+  </div>
+
+  <!-- 游戏画布 -->
+  <div id="canvas-wrap">
+    <canvas id="game-canvas" width="400" height="600"></canvas>
+    <div id="game-over-overlay">
+      <div id="go-title">游戏结束！</div>
+      <div id="go-score">得分：0</div>
+      <button class="big-btn" onclick="restartGame()">再来一局</button>
+    </div>
+  </div>
+
+  <!-- 自定义图片抽屉 -->
+  <div id="customize-drawer">
+    <div id="drawer-toggle">
+      <span>🎨 点击水果自定义图片</span>
+      <span id="drawer-arrow">▲</span>
+    </div>
+    <div id="fruit-scroll"></div>
+  </div>
+</div>
+
+<input type="file" id="hidden-file" accept="image/*">
+
+<script>
+const {Engine,Bodies,Body,World,Events} = Matter;
+
+const FRUITS = [
+  {name:'樱桃',r:18,score:1, color:'#e74c3c'},
+  {name:'草莓',r:26,score:3, color:'#e91e8c'},
+  {name:'葡萄',r:32,score:6, color:'#9b59b6'},
+  {name:'柠檬',r:38,score:10,color:'#f1c40f'},
+  {name:'橙子',r:46,score:15,color:'#e67e22'},
+  {name:'苹果',r:54,score:21,color:'#2ecc71'},
+  {name:'梨',  r:62,score:28,color:'#a8e063'},
+  {name:'桃子',r:70,score:36,color:'#ffb3ba'},
+  {name:'菠萝',r:80,score:45,color:'#ffd700'},
+  {name:'哈密瓜',r:90,score:55,color:'#7ed321'},
+  {name:'大西瓜',r:105,score:66,color:'#27ae60'},
+];
+
+const imageCache = new Array(FRUITS.length).fill(null);
+
+function loadSavedImages(){
+  FRUITS.forEach((_,i)=>{
+    const s = localStorage.getItem('fruit_img_'+i);
+    if(s){const img=new Image();img.onload=()=>{imageCache[i]=img;};img.src=s;}
+  });
+}
+loadSavedImages();
+
+// ---- 画布缩放 ----
+const CANVAS_W=400, CANVAS_H=600, WALL_T=30, DROP_Y=60;
+const gameCanvas = document.getElementById('game-canvas');
+const ctx = gameCanvas.getContext('2d');
+const nextCanvas = document.getElementById('next-canvas');
+const nextCtx = nextCanvas.getContext('2d');
+let canvasScale = 1;
+
+function resizeCanvas(){
+  const isDesktop = window.innerWidth >= 700;
+  if(isDesktop){
+    // 桌面：左栏160+gap14+画布+gap14+右栏160 = 约560+画布
+    const availH = window.innerHeight - 20;
+    const maxW = Math.min(400, window.innerWidth - 160*2 - 14*2 - 20);
+    const scaleByH = availH / CANVAS_H;
+    const scaleByW = maxW / CANVAS_W;
+    canvasScale = Math.min(scaleByH, scaleByW, 1);
+  } else {
+    // 手机：全宽减去padding
+    const avail = Math.min(window.innerWidth - 12, 400);
+    canvasScale = avail / CANVAS_W;
+  }
+  gameCanvas.style.width  = (CANVAS_W*canvasScale)+'px';
+  gameCanvas.style.height = (CANVAS_H*canvasScale)+'px';
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ---- 绘制水果 ----
+function drawFruit(c, x, y, r, idx, angle=0){
+  c.save();
+  c.translate(x,y);c.rotate(angle);
+  c.beginPath();c.arc(0,0,r,0,Math.PI*2);c.clip();
+  const img=imageCache[idx];
+  if(img&&img.complete){c.drawImage(img,-r,-r,r*2,r*2);}
+  else{
+    c.fillStyle=FRUITS[idx].color;c.fill();
+    c.fillStyle='rgba(0,0,0,0.3)';
+    c.font=`bold ${Math.max(9,r*0.45)}px Arial`;
+    c.textAlign='center';c.textBaseline='middle';
+    c.fillText(FRUITS[idx].name,0,0);
+  }
+  c.restore();
+  c.save();c.beginPath();c.arc(x,y,r,0,Math.PI*2);
+  c.strokeStyle='rgba(255,255,255,0.4)';c.lineWidth=2;c.stroke();c.restore();
+}
+
+// ---- 状态 ----
+let engine,world;
+let score=0,bestScore=parseInt(localStorage.getItem('suika_best')||'0');
+let curIdx=0,nextIdx=0,canDrop=true,gameOver=false;
+let mouseX=200;
+let bodies=[],mergeQueue=[],merging=new Set();
+
+document.getElementById('best-val').textContent=bestScore;
+
+function initPhysics(){
+  engine=Engine.create({gravity:{y:1.5}});
+  world=engine.world;
+  const wo={isStatic:true,friction:0.3,restitution:0.1,label:'wall'};
+  World.add(world,[
+    Bodies.rectangle(CANVAS_W/2,CANVAS_H+WALL_T/2,CANVAS_W*2,WALL_T,wo),
+    Bodies.rectangle(-WALL_T/2,CANVAS_H/2,WALL_T,CANVAS_H*2,wo),
+    Bodies.rectangle(CANVAS_W+WALL_T/2,CANVAS_H/2,WALL_T,CANVAS_H*2,wo),
+  ]);
+  Events.on(engine,'collisionStart',handleCollision);
+}
+
+function handleCollision(ev){
+  ev.pairs.forEach(({bodyA,bodyB})=>{
+    const ba=bodies.find(b=>b.body===bodyA&&!b.merged);
+    const bb=bodies.find(b=>b.body===bodyB&&!b.merged);
+    if(!ba||!bb||ba.fruitIdx!==bb.fruitIdx) return;
+    if(merging.has(ba.body.id)||merging.has(bb.body.id)) return;
+    if(ba.fruitIdx>=FRUITS.length-1) return;
+    merging.add(ba.body.id);merging.add(bb.body.id);
+    ba.merged=true;bb.merged=true;
+    const mx=(ba.body.position.x+bb.body.position.x)/2;
+    const my=(ba.body.position.y+bb.body.position.y)/2;
+    mergeQueue.push({x:mx,y:my,fruitIdx:ba.fruitIdx+1});
+    score+=FRUITS[ba.fruitIdx+1].score;updateScore();
+    setTimeout(()=>{
+      World.remove(world,ba.body);World.remove(world,bb.body);
+      bodies=bodies.filter(b=>b.body!==ba.body&&b.body!==bb.body);
+      merging.delete(ba.body.id);merging.delete(bb.body.id);
+    },50);
+  });
+}
+
+function addBody(x,y,idx,isNew=false){
+  const r=FRUITS[idx].r;
+  const body=Bodies.circle(x,y,r,{restitution:0.3,friction:0.5,frictionAir:0.01,density:0.002});
+  World.add(world,body);
+  bodies.push({body,fruitIdx:idx,merged:false,dropTime:isNew?Date.now():0});
+  return body;
+}
+
+function rand5(){return Math.floor(Math.random()*5);}
+
+function dropFruit(){
+  if(!canDrop||gameOver) return;
+  canDrop=false;
+  const r=FRUITS[curIdx].r;
+  const cx=Math.max(r+WALL_T,Math.min(CANVAS_W-r-WALL_T,mouseX));
+  addBody(cx,DROP_Y-r,curIdx,true);
+  curIdx=nextIdx;nextIdx=rand5();
+  drawNextPreview();
+  setTimeout(()=>{canDrop=true;},650);
+}
+
+function updateScore(){
+  document.getElementById('score-val').textContent=score;
+  if(score>bestScore){
+    bestScore=score;
+    localStorage.setItem('suika_best',bestScore);
+    document.getElementById('best-val').textContent=bestScore;
+  }
+}
+
+function triggerGameOver(){
+  if(gameOver) return;
+  gameOver=true;
+  document.getElementById('go-score').textContent='得分：'+score;
+  document.getElementById('game-over-overlay').classList.add('show');
+  if(score>bestScore){bestScore=score;localStorage.setItem('suika_best',bestScore);document.getElementById('best-val').textContent=bestScore;}
+}
+
+function restartGame(){
+  document.getElementById('game-over-overlay').classList.remove('show');
+  gameOver=false;canDrop=true;score=0;
+  bodies=[];mergeQueue=[];merging.clear();updateScore();
+  World.clear(world);Engine.clear(engine);
+  initPhysics();
+  curIdx=rand5();nextIdx=rand5();drawNextPreview();
+}
+
+// ---- 游戏循环 ----
+function gameLoop(){
+  Engine.update(engine,1000/60);
+  while(mergeQueue.length){
+    const {x,y,fruitIdx}=mergeQueue.shift();
+    addBody(x,Math.max(y,DROP_Y+20),fruitIdx,false);
+  }
+  if(!gameOver){
+    const now=Date.now();
+    bodies.forEach(b=>{
+      if(b.merged) return;
+      if(now-b.dropTime<2500) return;
+      if(b.body.position.y-FRUITS[b.fruitIdx].r<DROP_Y&&b.body.speed<0.3)
+        triggerGameOver();
+    });
+  }
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function draw(){
+  ctx.clearRect(0,0,CANVAS_W,CANVAS_H);
+  const g=ctx.createLinearGradient(0,0,0,CANVAS_H);
+  g.addColorStop(0,'#1a1a2e');g.addColorStop(1,'#16213e');
+  ctx.fillStyle=g;ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  // 危险线
+  ctx.strokeStyle='rgba(255,80,80,0.4)';ctx.setLineDash([8,6]);ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,DROP_Y);ctx.lineTo(CANVAS_W,DROP_Y);ctx.stroke();
+  ctx.setLineDash([]);
+  // 水果
+  bodies.forEach(({body,fruitIdx,merged})=>{
+    if(merged) return;
+    drawFruit(ctx,body.position.x,body.position.y,FRUITS[fruitIdx].r,fruitIdx,body.angle);
+  });
+  // 准星
+  if(!gameOver&&canDrop){
+    const r=FRUITS[curIdx].r;
+    ctx.save();ctx.globalAlpha=0.45;
+    drawFruit(ctx,mouseX,DROP_Y,r,curIdx,0);
+    ctx.restore();
+    ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.setLineDash([4,4]);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(mouseX,DROP_Y+r);ctx.lineTo(mouseX,CANVAS_H);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawNextPreview(){
+  nextCtx.clearRect(0,0,44,44);
+  nextCtx.fillStyle='#1a1a2e';nextCtx.fillRect(0,0,44,44);
+  drawFruit(nextCtx,22,22,Math.min(FRUITS[nextIdx].r,20),nextIdx,0);
+  document.getElementById('next-name').textContent=FRUITS[nextIdx].name;
+}
+
+// ---- 事件：鼠标 ----
+gameCanvas.addEventListener('mousemove',e=>{
+  const rect=gameCanvas.getBoundingClientRect();
+  mouseX=(e.clientX-rect.left)/canvasScale;
+});
+gameCanvas.addEventListener('click',()=>dropFruit());
+
+// ---- 事件：触摸 ----
+let touchActive=false;
+gameCanvas.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  touchActive=true;
+  const rect=gameCanvas.getBoundingClientRect();
+  mouseX=(e.touches[0].clientX-rect.left)/canvasScale;
+},{passive:false});
+
+gameCanvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const rect=gameCanvas.getBoundingClientRect();
+  mouseX=(e.touches[0].clientX-rect.left)/canvasScale;
+},{passive:false});
+
+gameCanvas.addEventListener('touchend',e=>{
+  e.preventDefault();
+  if(touchActive){dropFruit();touchActive=false;}
+},{passive:false});
+
+document.getElementById('restart-btn').addEventListener('click',restartGame);
+
+// ---- 抽屉切换（仅手机） ----
+let drawerOpen=false;
+const drawer=document.getElementById('customize-drawer');
+const fruitScroll=document.getElementById('fruit-scroll');
+const drawerArrow=document.getElementById('drawer-arrow');
+
+function setDrawer(open){
+  drawerOpen=open;
+  if(window.innerWidth>=700) return; // 桌面不收起
+  if(open){
+    const h=fruitScroll.scrollHeight;
+    drawer.style.maxHeight=(44+h+20)+'px';
+    drawerArrow.classList.add('open');
+  } else {
+    drawer.style.maxHeight='36px';
+    drawerArrow.classList.remove('open');
+  }
+}
+document.getElementById('drawer-toggle').addEventListener('click',()=>setDrawer(!drawerOpen));
+
+// 初始关闭抽屉（手机）
+if(window.innerWidth<700) drawer.style.maxHeight='36px';
+
+// ---- 自定义图片 ----
+let uploadingIdx=-1;
+
+function drawThumb(canvas,idx){
+  const c=canvas.getContext('2d');
+  c.clearRect(0,0,44,44);
+  c.save();c.beginPath();c.arc(22,22,20,0,Math.PI*2);c.clip();
+  const img=imageCache[idx];
+  if(img&&img.complete){c.drawImage(img,0,0,44,44);}
+  else{c.fillStyle=FRUITS[idx].color;c.fill();c.fillStyle='#fff';c.font='bold 9px Arial';c.textAlign='center';c.textBaseline='middle';c.fillText(FRUITS[idx].name,22,22);}
+  c.restore();
+  c.beginPath();c.arc(22,22,20,0,Math.PI*2);
+  c.strokeStyle='rgba(255,255,255,0.4)';c.lineWidth=1.5;c.stroke();
+}
+
+function buildFruitList(){
+  fruitScroll.innerHTML='';
+  FRUITS.forEach((f,i)=>{
+    const chip=document.createElement('div');
+    chip.className='fruit-chip';
+    chip.title='点击上传自定义图片';
+    const thumb=document.createElement('canvas');
+    thumb.width=44;thumb.height=44;
+    thumb.className='fruit-thumb';
+    thumb.id='thumb_'+i;
+    drawThumb(thumb,i);
+    const info=document.createElement('div');
+    info.className='fruit-chip-info';
+    info.innerHTML=`<div class="fruit-chip-name">${f.name}</div><div class="fruit-chip-score">+${f.score}分</div>`;
+    chip.appendChild(thumb);chip.appendChild(info);
+    chip.addEventListener('click',()=>{uploadingIdx=i;document.getElementById('hidden-file').click();});
+    fruitScroll.appendChild(chip);
+  });
+}
+
+document.getElementById('hidden-file').addEventListener('change',function(){
+  const file=this.files[0];
+  if(!file||uploadingIdx<0) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const url=e.target.result;
+    const img=new Image();
+    img.onload=()=>{
+      imageCache[uploadingIdx]=img;
+      try{localStorage.setItem('fruit_img_'+uploadingIdx,url);}catch(err){}
+      drawThumb(document.getElementById('thumb_'+uploadingIdx),uploadingIdx);
+      drawNextPreview();
+    };
+    img.src=url;
+  };
+  reader.readAsDataURL(file);
+  this.value='';
+});
+
+// ---- 启动 ----
+initPhysics();
+curIdx=rand5();nextIdx=rand5();
+buildFruitList();
+drawNextPreview();
+gameLoop();
+</script>
+</body>
+</html>
